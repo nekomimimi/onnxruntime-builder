@@ -362,6 +362,10 @@ jobs:
   build-xcframework:
     needs: build-onnxruntime
     runs-on: macos-12
+    env:
+      IOS_X86_64_PATH: artifact/onnxruntime-x86_64-apple-ios
+      IOS_AARCH64_SIM_PATH: artifact/onnxruntime-aarch64-apple-ios-sim
+      IOS_AARCH64_PATH: artifact/onnxruntime-aarch64-apple-ios
     steps:
       - name: Generate RELEASE_NAME and ONNXRUNTIME_BASENAME
         run: |
@@ -373,67 +377,73 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: onnxruntime-ios-arm64
-          path: artifact/onnxruntime-aarch64-apple-ios
+          path: ${{ env.IOS_X86_64_PATH }}
 
       - uses: actions/download-artifact@v4
         with:
           name: onnxruntime-ios-sim-arm64
-          path: artifact/onnxruntime-aarch64-apple-ios-sim
+          path: ${{ env.IOS_AARCH64_SIM_PATH }}
 
       - uses: actions/download-artifact@v4
         with:
           name: onnxruntime-ios-sim-x86_64
-          path: artifact/onnxruntime-x86_64-apple-ios
-
-      - name: Remove no version notation dylib
+          path: ${{ env.IOS_AARCH64_PATH }}
+      - name: Create xcframework
+        id: create-xcframework 
         run: |
-          rm -f artifact/onnxruntime-x86_64-apple-ios/lib/*onnxruntime.dylib
-          rm -f artifact/onnxruntime-aarch64-apple-ios-sim/lib/*onnxruntime.dylib
-          rm -f artifact/onnxruntime-aarch64-apple-ios/lib/*onnxruntime.dylib
+          build_util/make_ios_xcframework.bash
+          echo "output_asset_path=${OUTPUT_ASSET_PATH}" >> "$GITHUB_OUTPUT" 
+        env:
+          OUTPUT_ASSET_PATH: artifact/${{ env.ONNXRUNTIME_BASENAME }}
 
-      - name: Create aarch64 Framework
-        run: |
-          mkdir -p "Framework-aarch64"
-          cp -vr xcframework/Frameworks/aarch64/ Framework-aarch64/
+#      - name: Remove no version notation dylib
+#        run: |
+#          rm -f ${{ env.IOS_X86_64_PATH }}/lib/*onnxruntime.dylib
+#          rm -f ${{ env.IOS_AARCH64_SIM_PATH }}/lib/*onnxruntime.dylib
+#          rm -f ${{ env.IOS_AARCH64_PATH }}/lib/*onnxruntime.dylib
+#      - name: Create aarch64 Framework
+#        run: |
+#          mkdir -p "Framework-aarch64"
+#          cp -vr xcframework/Frameworks/aarch64/ Framework-aarch64/
 
-          lipo -create "artifact/onnxruntime-aarch64-apple-ios/lib/${{ env.ONNXRUNTIME_BASENAME }}" \
-            -output "Framework-aarch64/onnxruntime.framework/onnxruntime"
+#         cp -v "${{ env.IOS_AARCH64_PATH }}/lib/${{ env.ONNXRUNTIME_BASENAME }}" \
+#           "Framework-aarch64/onnxruntime.framework/onnxruntime"
 
-      - name: Change aarch64 @rpath
-        run: |
-          install_name_tool -id "@rpath/onnxruntime.framework/onnxruntime" \
-            "Framework-aarch64/onnxruntime.framework/onnxruntime"
+#      - name: Change aarch64 @rpath
+#        run: |
+#        install_name_tool -id "@rpath/onnxruntime.framework/onnxruntime" \
+#          "Framework-aarch64/onnxruntime.framework/onnxruntime"
 
-      - name: Create fat binary
-        run: |
-          mkdir -p "artifact/onnxruntime-sim"
-          lipo -create "artifact/onnxruntime-x86_64-apple-ios/lib/${{ env.ONNXRUNTIME_BASENAME }}" \
-            "artifact/onnxruntime-aarch64-apple-ios-sim/lib/${{ env.ONNXRUNTIME_BASENAME }}" \
-            -output "artifact/onnxruntime-sim/onnxruntime"
+#      - name: Create fat binary
+#        run: |
+#          mkdir -p "artifact/onnxruntime-sim"
+#          lipo -create "${{ env.IOS_X86_64_PATH }}/lib/${{ env.ONNXRUNTIME_BASENAME }}" \
+#            "${{ env.IOS_AARCH64_SIM_PATH }}/lib/${{ env.ONNXRUNTIME_BASENAME }}" \
+#            -output "artifact/onnxruntime-sim/onnxruntime"
 
-      - name: Create sim Framework
-        run: |
-          mkdir -p "Framework-sim"
-          cp -vr xcframework/Frameworks/sim/ Framework-sim/
-          cp -v "artifact/onnxruntime-sim/onnxruntime" \
-            "Framework-sim/onnxruntime.framework/onnxruntime"
+#      - name: Create sim Framework
+#        run: |
+#          mkdir -p "Framework-sim"
+#          cp -vr xcframework/Frameworks/sim/ Framework-sim/
+#          cp -v "artifact/onnxruntime-sim/onnxruntime" \
+#            "Framework-sim/onnxruntime.framework/onnxruntime"
 
-      - name: Change sim @rpath
-        run: |
-          install_name_tool -id "@rpath/onnxruntime.framework/onnxruntime" \
-            "Framework-sim/onnxruntime.framework/onnxruntime"
+#      - name: Change sim @rpath
+#        run: |
+#          install_name_tool -id "@rpath/onnxruntime.framework/onnxruntime" \
+#            "Framework-sim/onnxruntime.framework/onnxruntime"
 
-      - name: Create XCFramework
-        run: |
-          mkdir -p "artifact/${{ env.ONNXRUNTIME_BASENAME }}"
-          xcodebuild -create-xcframework \
-            -framework Framework-sim/onnxruntime.framework \
-            -framework Framework-aarch64/onnxruntime.framework \
-            -output "artifact/${{ env.ONNXRUNTIME_BASENAME }}/onnxruntime.xcframework"
+#      - name: Create XCFramework
+#        run: |
+#          mkdir -p "artifact/${{ env.ONNXRUNTIME_BASENAME }}"
+#          xcodebuild -create-xcframework \
+#            -framework Framework-sim/onnxruntime.framework \
+#            -framework Framework-aarch64/onnxruntime.framework \
+#            -output "artifact/${{ env.ONNXRUNTIME_BASENAME }}/onnxruntime.xcframework"
 
       - name: Archive artifact
         run: |
-          cd artifact/${{ env.ONNXRUNTIME_BASENAME }}
+          cd  ${{ steps.create-xcframework.outputs.output_asset_path }}
           7z a "../../${{ env.RELEASE_NAME }}.zip" "onnxruntime.xcframework"
 
       - name: Upload to Release
