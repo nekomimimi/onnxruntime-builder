@@ -910,6 +910,11 @@ jobs:
             mv xcframework/Frameworks/$arch/{,voicevox_}onnxruntime.framework
           done
           find ./xcframework -type f -exec sed -i '' s/onnxruntime/voicevox_onnxruntime/ {} +
+          # CFBundleIdentifier cannot contain underscores, unlike executable and module names.
+          for arch in aarch64 sim; do
+            /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier jp.hiroshiba.voicevox.voicevox-onnxruntime' \
+              "xcframework/Frameworks/$arch/voicevox_onnxruntime.framework/Info.plist"
+          done
 
       - name: Create aarch64 Framework
         run: |
